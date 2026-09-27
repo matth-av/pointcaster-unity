@@ -42,9 +42,9 @@ Shader "Point Cloud/Point Quad"
 
             struct Attributes
             {
-                // xyz is the position over the normalised range. w carries
-                // nothing: the attribute exists at four components because a
-                // vertex attribute has to be a multiple of four bytes wide
+                // xyz is the position over the normalised range. w is the
+                // point_scale radius over its own range, negative when the
+                // cloud has none
                 float4 position : POSITION;
                 half4 color : COLOR;
                 // which corner of its quad this vertex is, as -1/+1 in x and y
@@ -67,6 +67,8 @@ Shader "Point Cloud/Point Quad"
             // deliberately not a material property: it describes the incoming
             // data rather than anything there is a choice about
             float _PositionScale;
+            // turns w into a quad width in metres
+            float _PointScaleToSize;
 
             Varyings Vertex(Attributes input)
             {
@@ -84,19 +86,25 @@ Shader "Point Cloud/Point Quad"
 
                 float2 corner = input.corner;
 
+                float pointSize = _PointSize;
+
                 float3 viewPos = UnityObjectToViewPos(input.position.xyz * _PositionScale);
 
             #ifdef _DISTANCE_ON
-                // _PointSize is a width in world units, so offsetting in view
+                // a point_scale is a physical size, so it only means anything here
+                pointSize = lerp(pointSize, input.position.w * _PointScaleToSize,
+                    step(0.0, input.position.w));
+
+                // pointSize is a width in world units, so offsetting in view
                 // space keeps a point the same size in the scene, shrinking
                 // with distance
-                viewPos.xy += corner * _PointSize * 0.5;
+                viewPos.xy += corner * pointSize * 0.5;
                 o.position = mul(UNITY_MATRIX_P, float4(viewPos, 1));
             #else
-                // _PointSize is a width in pixels, so offsetting after the
+                // pointSize is a width in pixels, so offsetting after the
                 // projection keeps a point the same size on screen at any depth
                 o.position = mul(UNITY_MATRIX_P, float4(viewPos, 1));
-                o.position.xy += corner * _PointSize * o.position.w / _ScreenParams.xy;
+                o.position.xy += corner * pointSize * o.position.w / _ScreenParams.xy;
             #endif
 
                 o.color = col;
